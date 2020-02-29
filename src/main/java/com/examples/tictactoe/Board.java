@@ -1,7 +1,5 @@
 package com.examples.tictactoe;
 
-import com.examples.tictactoe.Environment;
-
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -16,15 +14,14 @@ import javax.swing.JPanel;
 public class Board extends JPanel {
 
     private JFrame mainFrame;
-    private Environment env;
 
     private int action;
+    private int turn;
 
     private boolean training;
+    private String currentStateString;
 
     public Board() {
-        env = Environment.getInstance();
-
         this.setSize(400, 400);
         
         mainFrame = new JFrame();
@@ -40,32 +37,24 @@ public class Board extends JPanel {
         action = -1;
     }
 
-    public boolean isTrainable() {
-        int option = JOptionPane.showOptionDialog(
+    public boolean isTrainingMode() {
+        int option = JOptionPane.showConfirmDialog(
             this,
             "Do you want to train agent?",
             "Train AI",
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.QUESTION_MESSAGE,
-            null,
-            new String[] {"Yes", "No"},
-            null
+            JOptionPane.YES_NO_OPTION
         );
 
-        training = false;
-
-        if (option == JOptionPane.CLOSED_OPTION)
-            System.exit(0);
-        else if (option == 0)
-            training = true;
-        else
-            training = false;
-
-        return training;
+        return option == JOptionPane.YES_OPTION;
     }
 
-    public void show() {
-        mainFrame.setVisible(true);
+    public void showDialog(String title, String msg) {
+        JOptionPane.showConfirmDialog(this, msg, title, JOptionPane.OK_CANCEL_OPTION);
+    }
+
+    public boolean confirmExit() {
+        int option = JOptionPane.showConfirmDialog(this, "Do you want to exit?", "Exit", JOptionPane.YES_NO_OPTION);
+        return option == JOptionPane.YES_OPTION;
     }
 
     public void resetAction() {
@@ -76,6 +65,20 @@ public class Board extends JPanel {
         return action;
     }
 
+    public void close() {
+        mainFrame.dispose();
+    }
+
+    public void update(String currentStateString, int turn) {
+        this.currentStateString = currentStateString;
+        this.turn = turn;
+
+        if (mainFrame.isVisible())
+            repaint();
+        else
+            mainFrame.setVisible(true);
+    }
+
     @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -83,10 +86,10 @@ public class Board extends JPanel {
         Graphics2D g2d = (Graphics2D) g;
         g2d.clearRect(0, 0, 400, 400);
 
-        drawBoard(g2d, env.getCurrentStateString());
+        drawGraphics(g2d, this.currentStateString);
     }
 
-    private void drawBoard(Graphics2D g2d, String state_string) {
+    private void drawGraphics(Graphics2D g2d, String state_string) {
         for (int i = 0; i < state_string.length(); i += 1) {
             char state_char = state_string.charAt(i);
             int center_x = 100 + 100*(i % 3);
@@ -116,7 +119,7 @@ public class Board extends JPanel {
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent ev) {
-                if (env.turn() != 1) return;
+                if (Board.this.turn != 1) return;
 
                 int x = ev.getX();
                 int y = ev.getY();

@@ -17,17 +17,6 @@ public class Environment {
 
     public static final String SAVE_PATH = "./state_value.bin";
 
-    private static Environment inst;
-
-    public static Environment getInstance() {
-        synchronized (Environment.class) {
-            if (inst == null) {
-                inst = new Environment();
-            }
-        }
-        return inst;
-    }
-
     private Map<String, State> states;
     private String currentState;
     private int winner;
@@ -35,7 +24,7 @@ public class Environment {
 
     private int turn;
 
-    private Environment() {
+    public Environment() {
         int num_states = 3^9;
 
         states = new HashMap<>(num_states);
@@ -109,7 +98,7 @@ public class Environment {
         turn = 1;
     }
 
-    public int turn() {
+    public int getTurn() {
         return turn;
     }
 
@@ -144,59 +133,48 @@ public class Environment {
         for (String key : states.keySet()) {
             State state = states.get(key);
 
-            double value = state.getValue();
-            int count = state.getCount();
+            List<Integer> actions = state.getActions();
+            List<Double> actionValues = state.getActionValues();
+            List<Double> policy = state.getPolicy();
 
-            serializableEnv.state_value.put(key, value);
-            serializableEnv.counts.put(key, count);
+            serializableEnv.actions.put(key, actions);
+            serializableEnv.actionValues.put(key, actionValues);
+            serializableEnv.policy.put(key, policy);
         }
 
         File file = new File(SAVE_PATH);
-        ObjectOutputStream objout = null;
 
-        try {
+        try (ObjectOutputStream objout = new ObjectOutputStream(new FileOutputStream(file))) {
             if (!Files.exists(file.toPath()))
                 Files.createFile(file.toPath());
-
-            objout = new ObjectOutputStream(new FileOutputStream(file));
+                
             objout.writeObject(serializableEnv);
         } catch (IOException exc) {
 
-        } finally {
-            try {
-                objout.close();
-            } catch (IOException exc) {}
         }
     }
 
     public void load() {
         File file = new File(SAVE_PATH);
-        ObjectInputStream objin = null;
 
         if (!Files.exists(file.toPath()))
             return;
 
-        try {
-            objin = new ObjectInputStream(new FileInputStream(file));
+        try (ObjectInputStream objin = new ObjectInputStream(new FileInputStream(file))) {
             SerializableEnvironment serializableEnv = (SerializableEnvironment) objin.readObject();
             
-            for (String key: states.keySet()) {
-                double value = serializableEnv.state_value.get(key);
-                int count = serializableEnv.counts.get(key);
+            for (String stateString: serializableEnv.actions.keySet()) {
+                State state = getState(stateString);
 
-                // if (value != 0) {
-                //     System.out.println("State: "+ key + ", Value: " + value + ", Count: " + count);
-                // }
+                List<Integer> actions = serializableEnv.actions.get(stateString);
+                List<Double> actionValues = serializableEnv.actionValues.get(stateString);
+                List<Double> policy = serializableEnv.policy.get(stateString);
 
-                states.get(key).loadState(count, value);
+                state.loadState(actions, actionValues, policy);
             }
 
         } catch (IOException | ClassNotFoundException exc) {
 
-        } finally {
-            try {
-                objin.close();
-            } catch (IOException exc) {}
         }
     }
 

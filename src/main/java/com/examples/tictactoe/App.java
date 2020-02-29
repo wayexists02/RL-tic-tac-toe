@@ -1,5 +1,6 @@
 package com.examples.tictactoe;
 
+import java.util.List;
 import javax.swing.JOptionPane;
 
 /**
@@ -8,117 +9,156 @@ import javax.swing.JOptionPane;
  */
 public class App 
 {
-    private static final double DISCOUNT_RATE = 0.5;
+    private static final double STEP_SIZE = 0.3;
+    private static final double DISCOUNT_RATE = 0.3;
+
+    private Environment env;
+    private Agent[] agents;
+    private Board board;
+
+    private boolean trainingMode;
+    private int trainingCounter;
+
+    public App() {
+        env = new Environment();
+        agents = new Agent[2];
+
+        agents[0] = new Agent("Agent 1", env, 0.5, STEP_SIZE, DISCOUNT_RATE);
+        agents[1] = new Agent("Agent 2", env, 0.0, STEP_SIZE, DISCOUNT_RATE);
+        board = new Board();
+
+        trainingMode = false;
+        trainingCounter = 0;
+    }
+
+    public void initialize() {
+        board.update(env.getCurrentStateString(), env.getTurn());
+    }
+
+    public void launch() {
+        System.out.println("Start!");
+        env.load();
+
+        while (true) {
+            if (!trainingMode && board.isTrainingMode()) {
+                trainingMode = true;
+                trainingCounter = 100000;
+                agents[1].setEpsilon(0.5);
+            }
+            else {
+                agents[1].setEpsilon(0.0);
+            }
+
+            initialize();
+
+            firstStep();
+            mainStep();
+            finalStep();
+
+            env.reset();
+
+            if (trainingMode && trainingCounter > 0) {
+                trainingCounter -= 1;
+                
+                if (trainingCounter == 0)
+                    trainingMode = false;
+
+                continue;
+            }
+
+            if (board.confirmExit()) break;
+        }
+        
+        env.save();
+        board.close();
+        System.out.println("end");
+    }
+
+    private void firstStep() {
+        int action = -1;
+
+        if (trainingMode) {
+            action = agents[0].firstStep();
+            nextTurn(action);
+        }
+        else {
+            System.out.println("\nTurn 1");
+            action = userInput();
+            System.out.println("Action: " + String.valueOf(action));
+            nextTurn(action);
+        }
+            
+        if (!trainingMode) System.out.println("\nTurn 2");
+        action = agents[1].firstStep();
+        if (!trainingMode) System.out.println("Action: " + String.valueOf(action));
+        nextTurn(action);
+    }
+
+    private void mainStep() {
+        while (!env.isGameOver()) {
+            int turn = env.getTurn();
+            int action = -1;
+
+            if (turn == 1 && !trainingMode) {
+                System.out.println("Turn 1");
+
+                action = userInput();
+            }
+            else if (turn == 1) {
+                action = agents[0].step(0.0);
+            }
+            else {
+                if (!trainingMode) System.out.println("Turn 2");
+                action = agents[1].step(0.0);
+            }
+            
+            if (!trainingMode) System.out.println("Action: " + String.valueOf(action));
+            nextTurn(action);
+        }
+    }
+
+    private void finalStep() {
+        int winner = env.getWinner();
+        int reward1 = 0;
+        int reward2 = 0;
+
+        if (winner == 1) {
+            reward1 = 1;
+            reward2 = -1;
+        }
+        else if (winner == 2) {
+            reward1 = -1;
+            reward2 = 1;
+        }
+
+        if (trainingMode) agents[0].finalStep(reward1);
+        agents[1].finalStep(reward2);
+    }
+
+    private void nextTurn(int action) {
+        env.updateState(action);
+        env.nextTurn();
+
+        // update board
+        board.resetAction();
+        board.update(env.getCurrentStateString(), env.getTurn());
+    }
+
+    private int userInput() {
+        int action = -1;
+
+        while (true) {
+            action = board.getAction();
+            if (action != -1 && env.isValidAction(action))
+                return action;
+
+            Thread.yield();
+        }
+    }
 
     public static void main( String[] args )
     {
-        // Create environment
-        Environment env = Environment.getInstance();
-        Board board = new Board();
-        board.show();
-
-        // create agent
-        Agent agent = new Agent("Agent");
-
-        System.out.println("Start");
-
-        env.load();
-
-        // main loop
-        while (true) {
-
-            // game loop
-            while (!env.isGameOver()) {
-                // System.out.println("Current state: " + env.getCurrentStateString());
-
-                // turn & action information
-                int turn = env.turn();
-                int action = -1;
-                
-                if (turn == 1) {
-                    // User or agent 1 turn
-                    System.out.println("Turn 1");
-
-                    while (true) {
-                        action = board.getAction();
-                        if (action != -1 && env.isValidAction(action))
-                            break;
-
-                        Thread.yield();
-                    }
-                }
-                else if (turn == 2) {
-                    // Agent 2 turn
-                    System.out.println("Turn 2");
-
-                    action = agent.epsilonGreedy();
-                }
-                else {
-                    // invalid turn
-                    System.err.println("Invalid turn number: " + String.valueOf(turn));
-                }
-
-                // System.out.println("Action: " + String.valueOf(action));
-
-                // update board
-                env.updateState(action);
-
-                board.repaint();
-                board.resetAction();
-                env.nextTurn();
-            }
-
-            double reward = 0;
-            int winner = env.getWinner();
-
-            if (winner == 1) {
-                reward = -1.0;
-            }
-            else if (winner == 2) {
-                reward = 1.0;
-            }
-
-            // update value function of agent 1
-            double reward_sample = reward;
-            for (String stateString : agent.getHistory()) {
-                State state = env.getState(stateString);
-                state.updateValue(reward_sample);
-
-                reward_sample = 0.0 + DISCOUNT_RATE * reward_sample;
-            }
-
-            System.out.println("Winner: " + winner);
-
-            if (winner == -1)
-                JOptionPane.showConfirmDialog(board, "Draw");
-            else
-                JOptionPane.showConfirmDialog(board, "Player " + winner + " win!");
-
-            // whether the player want to continue playing game or not
-            int option = JOptionPane.showOptionDialog(
-                board, 
-                "Do you want to continue playing game?", 
-                "End of Game", 
-                JOptionPane.YES_NO_OPTION, 
-                JOptionPane.QUESTION_MESSAGE, 
-                null, 
-                new String[] {"Yes", "No"}, 
-                null
-            );
-
-            // if no answer or 'no', then exit
-            if (option == JOptionPane.CLOSED_OPTION || option == 1)
-                break;
-
-            // before playing game, reset game environment
-            agent.reset();
-            env.save();
-            env.reset();
-
-            board.repaint();
-        }
-
-        System.out.println("End");
-        System.exit(0);
+        App app = new App();
+        app.launch();
     }
 }
